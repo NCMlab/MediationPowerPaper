@@ -66,17 +66,30 @@ def ResampleData(data, resamples):
     """ resample the data using a list of bootstrap indices """
     return data[resamples,:]
     
-def RunAnalyses(index):
-    print(index)
-    N = 200
-    NBoot = 2000
-    data = MakeDataModel59(N,[1,1,1,1],[1,1,1,1],[1,1,1,1,1,1,1,1])
+def RunAnalyses(N=200, NBoot=1000, SimMeans=[1, 1, 1, 1], SimStds=[1, 1, 1, 1], SimParams=[1,1,1,1,1,1,1,1]):
+    # Sample size        
+    # N = 200
+    # Number of bootstraps
+    # NBoot = 1000
+    # Mean values of the variables in the simulated data
+    # SimMeans = [1, 1, 1, 1]
+    # Standard deviatiosnin the simulated data
+    # SimStds = [1, 1, 1, 1]
+    # SimParams = [1,1,1,1,1,1,1,1]
+    # Make the simulated data
+    data = MakeDataModel59(N,SimMeans,SimStds,SimParams)
+    # Make an array of probe values for the moderator
+    ModRange = SimMeans[3] + np.array([-3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3])*SimStds[3]
+    # Make an array for boostrap resamples
     ResampleArray = MakeBootResampleArray(N,NBoot)
-    
+    # Fit the model and return the POINT ESTIMATES parameter estimates
     PEbetaB, PEbetaC = FitModel59(data)
+    # Find out how long the arrays are
+    NB = PEbetaB.shape[0]
+    NC = PEbetaC.shape[0]
+    NM = 3*len(ModRange)
+    # Apply the bootstrap resampling and return the parameter values
     BSbetaB, BSbetaC = ApplyBootstrap(data, ResampleArray)
-    PEDir, PEInd, PETot = CalculatePathsModel59(PEbetaB, PEbetaC, 1)
-    BSDir, BSInd, BSTot = CalculatePathsModel59(BSbetaB, BSbetaC, 1)
     # combine data so CI can be easily calculated
     AllB = []
     count = 0
@@ -87,17 +100,39 @@ def RunAnalyses(index):
     for i in PEbetaC:
         AllB.append([PEbetaC[count], BSbetaC[count,]])
         count += 1  
-    AllB.append([PEDir, BSDir])
-    AllB.append([PEInd, BSInd])
-    AllB.append([PETot, BSTot])
-    AllSign = np.zeros(len(AllB))
+    # Calculate the moderated indirect, direct and total effects at each probe value
+    for j in ModRange:
+        PEDir, PEInd, PETot = CalculatePathsModel59(PEbetaB, PEbetaC, j)
+        BSDir, BSInd, BSTot = CalculatePathsModel59(BSbetaB, BSbetaC, j)
+        AllB.append([PEDir, BSDir])
+        AllB.append([PEInd, BSInd])
+        AllB.append([PETot, BSTot])
+
+    # Create an array of column names
+    columnNames = []
+    for i in range(NB):
+        columnNames.append('paramA%d'%(i+1))
+    for i in range(NC):
+        columnNames.append('paramB%d'%(i+1))
+    for i in ModRange:
+        columnNames.append('modDir_D%0.1f'%(i))
+    for i in ModRange:
+        columnNames.append('modInd_D%0.1f'%(i))        
+    for i in ModRange:
+        columnNames.append('modTot_D%0.1f'%(i))        
+    # Calculate the confidence intervals 
     count = 0
+    AllSign = np.zeros(NB + NC + NM)
+
     for i in AllB:
         tempPer, tempBC, bias = CalculateCI(i[1], i[0])
+       # print(tempBC)
         if np.sign(np.array(tempBC).prod()) > 0:
             AllSign[count] = 1
-            count += 1
-    return AllSign
+        else:
+            AllSign[count] = 0
+        count += 1                
+    return AllSign, columnNames
 
     
     
@@ -266,3 +301,20 @@ def save_results(path, results):
     #(f'results-{os.environ["SLURM_JOBID"]}.pkl')
     new_df.to_pickle(path)
 
+def TestRun():
+    N = 50
+    NewDFflag = True
+    start = time.time()
+    for i in range(N):
+        AllSigns, colNames = RunAnalyses(i)
+        if NewDFflag:
+            df = pd.DataFrame([AllSigns], columns=colNames)
+            NewDFflag = False
+        else:
+            tempDF = pd.Series(AllSigns, index = df.columns)
+            df = df.append(tempDF, ignore_index = True)        
+    etime = time.time() - start
+    print("Ran %d in %0.6f"%(N,etime))
+    print(df.mean())    
+    
+    

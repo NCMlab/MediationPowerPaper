@@ -12,6 +12,8 @@ import os
 import numpy as np
 import ModMedTools as t
 import pandas as pd
+
+
 def f(x):
     return np.sqrt(x)
 
@@ -24,15 +26,15 @@ if __name__ == '__main__':
     start_time = time.time()
         #print(pool.map(t.RunAnalyses, a))
     job1 = pool.apply_async(t.RunAnalyses, args=(a))
-        #jobs1.append(job1)
+    jobs1.append(job1)
     # Close the pool
     print("--- %s seconds ---" % (time.time() - start_time))
     pool.close()
     print("--- %s seconds ---" % (time.time() - start_time))
     # By joining the pool this will wait until all jobs are completed
     pool.join()
-    print(job1)
-    for result in job1:
+    print(jobs1)
+    for result in jobs1:
         res = result.get()
         print(res)
     
