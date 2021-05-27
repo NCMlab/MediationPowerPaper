@@ -12,7 +12,7 @@ import time
 import multiprocessing as mp
 import pandas as pd
 from scipy.stats import norm
-
+from itertools import product
 def centered(data):
     cData = data - data.mean()
     return cData
@@ -65,18 +65,19 @@ def MakeBootResampleArray(N, M, offset = 0):
 def ResampleData(data, resamples):
     """ resample the data using a list of bootstrap indices """
     return data[resamples,:]
-    
-def RunAnalyses(N=200, NBoot=1000, SimMeans=[1, 1, 1, 1], SimStds=[1, 1, 1, 1], SimParams=[1,1,1,1,1,1,1,1]):
+
+def RunAnalyses(index, N, SimParams):#, NBoot=1000, SimMeans=[1, 1, 1, 1], SimStds=[1, 1, 1, 1], SimParams=[1,1,1,1,1,1,1,1]):
     # Sample size        
     # N = 200
     # Number of bootstraps
-    # NBoot = 1000
+    NBoot = 1000
     # Mean values of the variables in the simulated data
-    # SimMeans = [1, 1, 1, 1]
+    SimMeans = [1, 1, 1, 1]
     # Standard deviatiosnin the simulated data
-    # SimStds = [1, 1, 1, 1]
+    SimStds = [1, 1, 1, 1]
     # SimParams = [1,1,1,1,1,1,1,1]
     # Make the simulated data
+    # print("Sample Size %d"%(N))
     data = MakeDataModel59(N,SimMeans,SimStds,SimParams)
     # Make an array of probe values for the moderator
     ModRange = SimMeans[3] + np.array([-3, -2.5, -2, -1.5, -1, -0.5, 0, 0.5, 1, 1.5, 2, 2.5, 3])*SimStds[3]
@@ -110,6 +111,7 @@ def RunAnalyses(N=200, NBoot=1000, SimMeans=[1, 1, 1, 1], SimStds=[1, 1, 1, 1], 
 
     # Create an array of column names
     columnNames = []
+    columnNames.append('SampleSize')
     for i in range(NB):
         columnNames.append('paramA%d'%(i+1))
     for i in range(NC):
@@ -121,9 +123,10 @@ def RunAnalyses(N=200, NBoot=1000, SimMeans=[1, 1, 1, 1], SimStds=[1, 1, 1, 1], 
     for i in ModRange:
         columnNames.append('modTot_D%0.1f'%(i))        
     # Calculate the confidence intervals 
-    count = 0
-    AllSign = np.zeros(NB + NC + NM)
 
+    AllSign = np.zeros(NB + NC + NM+1)
+    AllSign[0] = N
+    count = 1
     for i in AllB:
         tempPer, tempBC, bias = CalculateCI(i[1], i[0])
        # print(tempBC)
@@ -302,7 +305,7 @@ def save_results(path, results):
     new_df.to_pickle(path)
 
 def TestRun():
-    N = 50
+    N = 100
     NewDFflag = True
     start = time.time()
     for i in range(N):
@@ -316,5 +319,35 @@ def TestRun():
     etime = time.time() - start
     print("Ran %d in %0.6f"%(N,etime))
     print(df.mean())    
-    
+
+def SaveMPresults(data, N):
+    NewDFflag = True
+    start = time.time()
+    for i in range(N):
+        temp = next(data)
+        # print(temp)
+        # print(temp[0])
+        # print((temp[1]))
+        AllSigns = temp[0]
+        colNames = temp[1]
+        if NewDFflag:
+            df = pd.DataFrame([AllSigns], columns=colNames)
+            NewDFflag = False
+        else:
+            tempDF = pd.Series(AllSigns, index = df.columns)
+            df = df.append(tempDF, ignore_index = True)        
+    etime = time.time() - start
+    print("Ran %d in %0.6f"%(N,etime))
+    print(df.mean())    
+    # for i in range(N):
+    #     print(next(data))
+
+def MakeParams():
+    a = [1,0.66,0.33,0,-0.33, -0.66, -1]
+    p = product(a,a,[19])
+    count = 0 
+    for i in p:
+        print(i)
+        count += 1
+    print(count)
     
